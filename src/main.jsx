@@ -2,6 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import './styles.css';
+import MetricCard from './components/MetricCard';
+import SectionHeader from './components/SectionHeader';
+import LoadingState from './components/LoadingState';
+import ErrorState from './components/ErrorState';
+import EmptyState from './components/EmptyState';
+import InsightCard from './components/InsightCard';
+import AboutData from './components/AboutData';
 
 const API = 'https://data.cityofnewyork.us/resource/2nwg-uqyg.json';
 const LATEST_EXTRACT_QUERY = new URLSearchParams({ '$select': 'max(extract_date) as latest_extract_date' }).toString();
@@ -125,33 +132,202 @@ function App() {
   }, [rows, rollingRows]);
 
   return <main>
-    <header><p className="eyebrow">NYC OPEN DATA</p><h1>Influenza-like Illness &amp; Pneumonia<br/>Emergency Department Trends</h1><p className="lede">Explore daily ILI/pneumonia emergency department visits across NYC or focus on a single modified ZIP Code Tabulation Area (MODZCTA). The dashboard uses the latest Department of Health and Mental Hygiene extraction to avoid counting repeated historical snapshots.</p></header>
+    <header>
+      <p className="eyebrow">NYC OPEN DATA</p>
+      <h1>Influenza-like Illness &amp; Pneumonia<br/>Emergency Department Trends</h1>
+      <p className="lede">Explore daily ILI/pneumonia emergency department visits across NYC or focus on a single modified ZIP Code Tabulation Area (MODZCTA). The dashboard uses the latest Department of Health and Mental Hygiene extraction to avoid counting repeated historical snapshots.</p>
+    </header>
 
-    <section className="controls" aria-label="Dashboard filters"><label htmlFor="geography">Geography</label><select id="geography" value={selectedModZcta} onChange={changeGeography} disabled={!extractDate || !modZctas.length || status==='loading'}><option value="">All NYC</option>{modZctas.map(z => <option key={z} value={z}>MODZCTA {z}</option>)}</select><p>{modZctas.length ? `${modZctas.length} MODZCTAs available` : 'Loading geographic options…'}</p></section>
-
-    <section className="card"><div className="cardHead"><div><h2>Visits over time</h2><p>{geographyLabel} · March 2020–December 2022{extractDate && <> · Latest extraction: {extractDate}</>}</p></div>{peak && status==='ready' && <div className="stat"><span>Peak daily total</span><strong>{peak.visits.toLocaleString()}</strong><small>{peak.date}</small></div>}</div>
-      {status==='loading' && <div className="state">Loading {geographyLabel} data…</div>}
-      {status==='error' && <div className="state error"><div><strong>Couldn’t load the data.</strong><br/>{error}<div><button type="button" onClick={retry}>Try again</button></div></div></div>}
-      {status==='ready' && <div className="chart"><ResponsiveContainer width="100%" height={430}><LineChart data={rows} margin={{top:12,right:20,left:10,bottom:12}}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="date" minTickGap={55}/><YAxis width={70}/><Tooltip formatter={v => [Number(v).toLocaleString(),'ILI/pneumonia visits']}/><Line type="monotone" dataKey="visits" stroke="currentColor" strokeWidth={2} dot={false}/></LineChart></ResponsiveContainer></div>}
+    <section className="controls" aria-label="Dashboard filters">
+      <label htmlFor="geography">Geography</label>
+      <select 
+        id="geography" 
+        value={selectedModZcta} 
+        onChange={changeGeography} 
+        disabled={!extractDate || !modZctas.length || status==='loading'}
+        aria-describedby="geography-help"
+      >
+        <option value="">All NYC</option>
+        {modZctas.map(z => <option key={z} value={z}>MODZCTA {z}</option>)}
+      </select>
+      <p id="geography-help">{modZctas.length ? `${modZctas.length} MODZCTAs available` : 'Loading geographic options…'}</p>
     </section>
 
-    {status==='ready' && <section className="contextSection">
-      <div className="sectionIntro"><h2>How much ED activity involved ILI/pneumonia?</h2><p>These rates add context to the visit count above. They use the same geography and latest extraction.</p></div>
-      <div className="metrics"><div className="metric"><span>Share of all ED visits</span><strong>{summary.iliShare.toFixed(1)}%</strong><p>ILI/pneumonia visits ÷ total ED visits</p></div><div className="metric"><span>Admission rate</span><strong>{summary.admissionRate.toFixed(1)}%</strong><p>ILI/pneumonia admissions ÷ ILI/pneumonia visits</p></div></div>
-      <div className="card contextCard"><div className="cardHead"><div><h2>7-day average rates over time</h2><p>{geographyLabel} · Rolling 7-day rates reduce day-to-day volatility, especially in smaller MODZCTAs.</p></div></div><div className="chart"><ResponsiveContainer width="100%" height={360}><LineChart data={rollingRows} margin={{top:8,right:20,left:0,bottom:12}}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="date" minTickGap={55}/><YAxis width={62} tickFormatter={v => `${v}%`}/><Tooltip formatter={(v,name) => [`${Number(v).toFixed(1)}%`, name === 'iliShare7d' ? '7-day ILI/pneumonia share' : '7-day admission rate']}/><Legend formatter={v => v === 'iliShare7d' ? '7-day ILI/pneumonia share of ED visits' : '7-day admission rate among ILI/pneumonia visits'}/><Line type="monotone" dataKey="iliShare7d" stroke="currentColor" strokeWidth={2.5} dot={false}/><Line type="monotone" dataKey="admissionRate7d" stroke="currentColor" strokeWidth={2} strokeDasharray="7 5" dot={false}/></LineChart></ResponsiveContainer></div></div>
-    </section>}
-
-    {status==='ready' && story && <section className="storySection" aria-labelledby="story-heading">
-      <div className="sectionIntro"><h2 id="story-heading">What stands out?</h2><p>A few descriptive takeaways from the current geography. These summarize the data without assigning a cause to the changes.</p></div>
-      <div className="storyGrid">
-        <article className="storyItem"><span>Highest daily visit count</span><strong>{peak.visits.toLocaleString()}</strong><p>{peak.date}. This is the highest ILI/pneumonia visit total in the selected series.</p></article>
-        <article className="storyItem"><span>Highest 7-day ILI/pneumonia share</span><strong>{story.maxShare.iliShare7d.toFixed(1)}%</strong><p>Seven-day rate ending {story.maxShare.date}.</p></article>
-        <article className="storyItem"><span>Recent 30-day visit average</span><strong>{story.recent.toFixed(1)}</strong><p>{Math.abs(story.change).toFixed(1)}% {story.change >= 0 ? 'higher' : 'lower'} than the preceding 30 days.</p></article>
+    <section className="card primary-chart-card">
+      <div className="cardHead">
+        <div>
+          <h2>Visits over time</h2>
+          <p>{geographyLabel} · March 2020–December 2022{extractDate && <> · Latest extraction: {extractDate}</>}</p>
+        </div>
+        {peak && status==='ready' && (
+          <MetricCard 
+            label="Peak daily total" 
+            value={peak.visits.toLocaleString()} 
+            explanation={peak.date}
+            size="small"
+          />
+        )}
       </div>
-      <p className="interpretationNote"><strong>How to read this:</strong> spikes and percentage changes describe patterns in this dataset. They do not by themselves explain why those patterns occurred.</p>
-    </section>}
+      
+      {status==='loading' && <LoadingState message={`Loading ${geographyLabel} data…`} />}
+      {status==='error' && <ErrorState message={error} onRetry={retry} />}
+      {status==='ready' && !rows.length && <EmptyState />}
+      {status==='ready' && rows.length > 0 && (
+        <div className="chart">
+          <ResponsiveContainer width="100%" height={430}>
+            <LineChart data={rows} margin={{top:12,right:20,left:10,bottom:12}}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eef3"/>
+              <XAxis 
+                dataKey="date" 
+                minTickGap={55}
+                tick={{fill: '#6b7784', fontSize: 12}}
+                axisLine={{stroke: '#dde3e8'}}
+              />
+              <YAxis 
+                width={70}
+                tick={{fill: '#6b7784', fontSize: 12}}
+                axisLine={{stroke: '#dde3e8'}}
+                tickFormatter={v => v.toLocaleString()}
+              />
+              <Tooltip 
+                formatter={(value, name) => [Number(value).toLocaleString(), 'ILI/pneumonia visits']}
+                contentStyle={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dde3e8',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  fontSize: '13px'
+                }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="visits" 
+                stroke="#2667a8" 
+                strokeWidth={2.5} 
+                dot={false}
+                activeDot={{r: 5, fill: '#2667a8', stroke: '#fff', strokeWidth: 2}}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
 
-    <footer><span>Source: NYC Open Data · Emergency Department Visits and Admissions for Influenza-like Illness and/or Pneumonia</span><span>Latest extraction used: {extractDate || 'loading'}</span></footer>
+    {status==='ready' && rows.length > 0 && (
+      <section className="contextSection">
+        <SectionHeader 
+          title="How much ED activity involved ILI/pneumonia?" 
+          description="These rates add context to the visit count above. They use the same geography and latest extraction."
+          level={2}
+        />
+        <div className="metrics">
+          <MetricCard 
+            label="Share of all ED visits" 
+            value={`${summary.iliShare.toFixed(1)}%`} 
+            explanation="ILI/pneumonia visits ÷ total ED visits"
+          />
+          <MetricCard 
+            label="Admission rate" 
+            value={`${summary.admissionRate.toFixed(1)}%`} 
+            explanation="ILI/pneumonia admissions ÷ ILI/pneumonia visits"
+          />
+        </div>
+        <div className="card contextCard">
+          <div className="cardHead">
+            <div>
+              <h2>7-day average rates over time</h2>
+              <p>{geographyLabel} · Rolling 7-day rates reduce day-to-day volatility, especially in smaller MODZCTAs.</p>
+            </div>
+          </div>
+          <div className="chart">
+            <ResponsiveContainer width="100%" height={360}>
+              <LineChart data={rollingRows} margin={{top:8,right:20,left:0,bottom:12}}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eef3"/>
+                <XAxis 
+                  dataKey="date" 
+                  minTickGap={55}
+                  tick={{fill: '#6b7784', fontSize: 12}}
+                  axisLine={{stroke: '#dde3e8'}}
+                />
+                <YAxis 
+                  width={62} 
+                  tickFormatter={v => `${v}%`}
+                  tick={{fill: '#6b7784', fontSize: 12}}
+                  axisLine={{stroke: '#dde3e8'}}
+                />
+                <Tooltip 
+                  formatter={(v,name) => [`${Number(v).toFixed(1)}%`, name === 'iliShare7d' ? '7-day ILI/pneumonia share' : '7-day admission rate']}
+                  contentStyle={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #dde3e8',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    fontSize: '13px'
+                  }}
+                />
+                <Legend 
+                  formatter={v => v === 'iliShare7d' ? '7-day ILI/pneumonia share of ED visits' : '7-day admission rate among ILI/pneumonia visits'}
+                  iconType="plainline"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="iliShare7d" 
+                  stroke="#2667a8" 
+                  strokeWidth={2.5} 
+                  dot={false}
+                  name="iliShare7d"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="admissionRate7d" 
+                  stroke="#6b7784" 
+                  strokeWidth={2} 
+                  strokeDasharray="6 4" 
+                  dot={false}
+                  name="admissionRate7d"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+    )}
+
+    {status==='ready' && rows.length > 0 && story && (
+      <section className="storySection" aria-labelledby="story-heading">
+        <SectionHeader 
+          title="What stands out?" 
+          description="A few descriptive takeaways from the current geography. These summarize the data without assigning a cause to the changes."
+          id="story-heading"
+          level={2}
+        />
+        <div className="storyGrid">
+          <InsightCard 
+            label="Highest daily visit count"
+            value={peak.visits.toLocaleString()}
+            description={`${peak.date}. This is the highest ILI/pneumonia visit total in the selected series.`}
+          />
+          <InsightCard 
+            label="Highest 7-day ILI/pneumonia share"
+            value={`${story.maxShare.iliShare7d.toFixed(1)}%`}
+            description={`Seven-day rate ending ${story.maxShare.date}.`}
+          />
+          <InsightCard 
+            label="Recent 30-day visit average"
+            value={story.recent.toFixed(1)}
+            description={`${Math.abs(story.change).toFixed(1)}% ${story.change >= 0 ? 'higher' : 'lower'} than the preceding 30 days.`}
+          />
+        </div>
+        <p className="interpretationNote"><strong>How to read this:</strong> spikes and percentage changes describe patterns in this dataset. They do not by themselves explain why those patterns occurred.</p>
+      </section>
+    )}
+
+    <AboutData />
+
+    <footer>
+      <span>Source: NYC Open Data · Emergency Department Visits and Admissions for Influenza-like Illness and/or Pneumonia</span>
+      <span>Latest extraction used: {extractDate || 'loading'}</span>
+    </footer>
   </main>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
