@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import './styles.css';
 
-const API = '/nyc-open-data/resource/2nwg-uqyg.json';
+const API = 'https://data.cityofnewyork.us/resource/2nwg-uqyg.json';
 const LATEST_EXTRACT_QUERY = new URLSearchParams({ '$select': 'max(extract_date) as latest_extract_date' }).toString();
 
 function modZctaQuery(extractDate) {
